@@ -1,4 +1,5 @@
 import 'package:alarm/alarm.dart';
+import 'package:alarm/model/status_enum.dart';
 import 'package:alarm/src/generated/platform_bindings.g.dart';
 
 /// Implements the API that handles calls coming from the host platform.
@@ -23,6 +24,7 @@ class AlarmTriggerApiImpl extends AlarmTriggerApi {
       return;
     }
     Alarm.ringStream.add(settings);
+    Alarm.statusStream.add(StatusEnum.playing);
   }
 
   @override
