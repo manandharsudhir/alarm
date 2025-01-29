@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:alarm/model/alarm_settings.dart';
+import 'package:alarm/model/status_enum.dart';
 import 'package:alarm/service/alarm_storage.dart';
 import 'package:alarm/src/alarm_trigger_api_impl.dart';
 import 'package:alarm/src/android_alarm.dart';
@@ -28,6 +29,7 @@ class Alarm {
 
   /// Stream of the alarm updates.
   static final updateStream = StreamController<int>();
+  static final statusStream = StreamController<StatusEnum>();
 
   /// Stream of the ringing status.
   static final ringStream = StreamController<AlarmSettings>();
@@ -194,5 +196,6 @@ class Alarm {
     // TODO(orkun1675): Remove this function and publish stream updates for
     // alarm start/stop events.
     updateStream.add(id);
+    Alarm.statusStream.add(StatusEnum.stopped);
   }
 }
