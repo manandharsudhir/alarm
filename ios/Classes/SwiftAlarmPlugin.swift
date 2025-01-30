@@ -5,19 +5,11 @@ public class SwiftAlarmPlugin: NSObject, FlutterPlugin {
     static let backgroundTaskIdentifier: String = "com.gdelataillade.fetch"
 
     private static var api: AlarmApiImpl? = nil
-    static var alarmTriggerApi: AlarmTriggerApi? = nil
-    
-    public static func register(with registrar: any FlutterPluginRegistrar) {
+
+    public static func register(with registrar: FlutterPluginRegistrar) {
         self.api = AlarmApiImpl(registrar: registrar)
         AlarmApiSetup.setUp(binaryMessenger: registrar.messenger(), api: self.api)
         NSLog("[SwiftAlarmPlugin] AlarmApi initialized.")
-        self.alarmTriggerApi = AlarmTriggerApi(binaryMessenger: registrar.messenger())
-        NSLog("[SwiftAlarmPlugin] AlarmTriggerApi initialized.")
-    }
-    
-    public func detachFromEngine(for registrar: any FlutterPluginRegistrar) {
-        SwiftAlarmPlugin.alarmTriggerApi = nil
-        NSLog("[SwiftAlarmPlugin] AlarmTriggerApi detached.")
     }
 
     public func applicationWillTerminate(_ application: UIApplication) {

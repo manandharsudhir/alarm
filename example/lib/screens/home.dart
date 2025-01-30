@@ -9,7 +9,7 @@ import 'package:alarm_example/widgets/tile.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const version = '5.0.0-dev.3';
+const version = '4.1.1';
 
 class ExampleAlarmHomeScreen extends StatefulWidget {
   const ExampleAlarmHomeScreen({super.key});
@@ -66,7 +66,7 @@ class _ExampleAlarmHomeScreenState extends State<ExampleAlarmHomeScreen> {
       ),
       builder: (context) {
         return FractionallySizedBox(
-          heightFactor: 0.85,
+          heightFactor: 0.75,
           child: ExampleAlarmEditScreen(alarmSettings: settings),
         );
       },
@@ -131,16 +131,6 @@ class _ExampleAlarmHomeScreenState extends State<ExampleAlarmHomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             ExampleAlarmHomeShortcutButton(refreshAlarms: loadAlarms),
-            const FloatingActionButton(
-              onPressed: Alarm.stopAll,
-              backgroundColor: Colors.red,
-              heroTag: null,
-              child: Text(
-                'STOP ALL',
-                textScaler: TextScaler.linear(0.9),
-                textAlign: TextAlign.center,
-              ),
-            ),
             FloatingActionButton(
               onPressed: () => navigateToAlarmScreen(null),
               child: const Icon(Icons.alarm_add_rounded, size: 33),

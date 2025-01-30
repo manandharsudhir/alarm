@@ -1,5 +1,4 @@
 import AVFoundation
-import Flutter
 import MediaPlayer
 
 public class AlarmApiImpl: NSObject, AlarmApi {
@@ -36,12 +35,25 @@ public class AlarmApiImpl: NSObject, AlarmApi {
 
         NSLog("[SwiftAlarmPlugin] AlarmSettings: \(String(describing: alarmSettings))")
 
+        var volumeFloat: Float? = nil
+        if let volumeValue = alarmSettings.volume {
+            volumeFloat = Float(volumeValue)
+        }
+
         let id = alarmSettings.id
         let delayInSeconds = alarmSettings.dateTime.timeIntervalSinceNow
 
         NSLog("[SwiftAlarmPlugin] Alarm scheduled in \(delayInSeconds) seconds")
 
-        let alarmConfig = AlarmConfiguration(settings: alarmSettings)
+        let alarmConfig = AlarmConfiguration(
+            id: id,
+            assetAudio: alarmSettings.assetAudioPath,
+            vibrationsEnabled: alarmSettings.vibrate,
+            loopAudio: alarmSettings.loopAudio,
+            fadeDuration: alarmSettings.fadeDuration,
+            volume: volumeFloat,
+            volumeEnforced: alarmSettings.volumeEnforced
+        )
 
         self.alarms[id] = alarmConfig
 
@@ -63,7 +75,6 @@ public class AlarmApiImpl: NSObject, AlarmApi {
             let currentTime = audioPlayer.deviceCurrentTime
             let time = currentTime + delayInSeconds
             let dateTime = Date().addingTimeInterval(delayInSeconds)
-            self.alarms[id]?.triggerTime = dateTime
 
             if alarmSettings.loopAudio {
                 audioPlayer.numberOfLoops = -1
@@ -75,10 +86,10 @@ public class AlarmApiImpl: NSObject, AlarmApi {
                 self.startSilentSound()
             }
 
-            audioPlayer.volume = 0.0
             audioPlayer.play(atTime: time + 0.5)
 
             self.alarms[id]?.audioPlayer = audioPlayer
+            self.alarms[id]?.triggerTime = dateTime
             self.alarms[id]?.task = DispatchWorkItem(block: {
                 self.handleAlarmAfterDelay(id: id)
             })
@@ -93,47 +104,13 @@ public class AlarmApiImpl: NSObject, AlarmApi {
     func stopAlarm(alarmId: Int64) throws {
         self.stopAlarmInternal(id: Int(truncatingIfNeeded: alarmId), cancelNotif: true)
     }
-    
-    func stopAll() throws {
-        NotificationManager.shared.removeAllNotifications()
-
-        self.mixOtherAudios()
-
-        self.vibratingAlarms.removeAll()
-
-        if let previousVolume = self.previousVolume {
-            self.setVolume(volume: previousVolume, enable: false)
-        }
-        
-        let alarmIds = self.alarms.keys
-        
-        for (_, alarm) in self.alarms {
-            alarm.timer?.invalidate()
-            alarm.task?.cancel()
-            alarm.audioPlayer?.stop()
-            alarm.volumeEnforcementTimer?.invalidate()
-        }
-        self.alarms.removeAll()
-
-        self.stopSilentSound()
-        self.stopNotificationOnKillService()
-        
-        for (id) in alarmIds {
-            // Inform the Flutter plugin that the alarm was stopped
-            SwiftAlarmPlugin.alarmTriggerApi?.alarmStopped(alarmId: Int64(id), completion: { result in
-                if case .success = result {
-                    NSLog("[SwiftAlarmPlugin] Alarm stopped notification for \(id) was processed successfully by Flutter.")
-                } else {
-                    NSLog("[SwiftAlarmPlugin] Alarm stopped notification for \(id) encountered error in Flutter.")
-                }
-            })
-        }
-    }
 
     func isRinging(alarmId: Int64?) throws -> Bool {
         if let alarmId = alarmId {
             let id = Int(truncatingIfNeeded: alarmId)
-            return self.alarms[id]?.triggerTime?.timeIntervalSinceNow ?? 1.0 <= 0.0
+            let isPlaying = self.alarms[id]?.audioPlayer?.isPlaying ?? false
+            let currentTime = self.alarms[id]?.audioPlayer?.currentTime ?? 0.0
+            return isPlaying && currentTime > 0
         } else {
             return self.isAnyAlarmRinging()
         }
@@ -247,7 +224,7 @@ public class AlarmApiImpl: NSObject, AlarmApi {
             do {
                 self.silentAudioPlayer = try AVAudioPlayer(contentsOf: audioUrl)
                 self.silentAudioPlayer?.numberOfLoops = -1
-                self.silentAudioPlayer?.volume = 0.01
+                self.silentAudioPlayer?.volume = 0.1
                 self.playSilent = true
                 self.silentAudioPlayer?.play()
                 NotificationCenter.default.addObserver(self, selector: #selector(self.handleInterruption), name: AVAudioSession.interruptionNotification, object: nil)
@@ -261,16 +238,7 @@ public class AlarmApiImpl: NSObject, AlarmApi {
 
     private func isAnyAlarmRinging() -> Bool {
         for (_, alarmConfig) in self.alarms {
-            if alarmConfig.triggerTime?.timeIntervalSinceNow ?? 1.0 <= 0.0 {
-                return true
-            }
-        }
-        return false
-    }
-    
-    private func isAnyAlarmRingingExcept(id: Int) -> Bool {
-        for (alarmId, alarmConfig) in self.alarms {
-            if alarmId != id && alarmConfig.triggerTime?.timeIntervalSinceNow ?? 1.0 <= 0.0 {
+            if let audioPlayer = alarmConfig.audioPlayer, audioPlayer.isPlaying, audioPlayer.currentTime > 0 {
                 return true
             }
         }
@@ -278,13 +246,13 @@ public class AlarmApiImpl: NSObject, AlarmApi {
     }
 
     private func handleAlarmAfterDelay(id: Int) {
-        guard let alarm = self.alarms[id], let audioPlayer = alarm.audioPlayer else {
+        if self.isAnyAlarmRinging() {
+            NSLog("[SwiftAlarmPlugin] Ignoring alarm with id \(id) because another alarm is already ringing.")
+            self.unsaveAlarm(id: id)
             return
         }
 
-        if !alarm.settings.allowAlarmOverlap && self.isAnyAlarmRingingExcept(id: id) {
-            NSLog("[SwiftAlarmPlugin] Ignoring alarm with id \(id) because another alarm is already ringing.")
-            self.unsaveAlarm(id: id)
+        guard let alarm = self.alarms[id], let audioPlayer = alarm.audioPlayer else {
             return
         }
 
@@ -293,24 +261,15 @@ public class AlarmApiImpl: NSObject, AlarmApi {
         if !audioPlayer.isPlaying || audioPlayer.currentTime == 0.0 {
             audioPlayer.play()
         }
-        
-        // Inform the Flutter plugin that the alarm rang
-        SwiftAlarmPlugin.alarmTriggerApi?.alarmRang(alarmId: Int64(id), completion: { result in
-            if case .success = result {
-                NSLog("[SwiftAlarmPlugin] Alarm rang notification for \(id) was processed successfully by Flutter.")
-            } else {
-                NSLog("[SwiftAlarmPlugin] Alarm rang notification for \(id) encountered error in Flutter.")
-            }
-        })
 
-        if alarm.settings.vibrate {
+        if alarm.vibrationsEnabled {
             self.vibratingAlarms.insert(id)
             if self.vibratingAlarms.count == 1 {
                 self.triggerVibrations()
             }
         }
 
-        if !alarm.settings.loopAudio {
+        if !alarm.loopAudio {
             let audioDuration = audioPlayer.duration
             DispatchQueue.main.asyncAfter(deadline: .now() + audioDuration) {
                 self.stopAlarmInternal(id: id, cancelNotif: false)
@@ -320,22 +279,21 @@ public class AlarmApiImpl: NSObject, AlarmApi {
         let currentSystemVolume = self.getSystemVolume()
         let targetSystemVolume: Float
 
-        if let volumeValue = alarm.settings.volumeSettings.volume {
-            targetSystemVolume = Float(volumeValue)
+        if let volumeValue = alarm.volume {
+            targetSystemVolume = volumeValue
             self.setVolume(volume: targetSystemVolume, enable: true)
         } else {
             targetSystemVolume = currentSystemVolume
         }
 
-        if !alarm.settings.volumeSettings.fadeSteps.isEmpty {
-            self.fadeAlarmVolumeWithSteps(id: id, steps: alarm.settings.volumeSettings.fadeSteps)
-        } else if let fadeDuration = alarm.settings.volumeSettings.fadeDuration {
-            self.fadeAlarmVolumeWithSteps(id: id, steps: [VolumeFadeStep(time: 0, volume: 0), VolumeFadeStep(time: fadeDuration, volume: 1.0)])
+        if alarm.fadeDuration > 0.0 {
+            audioPlayer.volume = 0.01
+            self.fadeVolume(audioPlayer: audioPlayer, duration: alarm.fadeDuration)
         } else {
             audioPlayer.volume = 1.0
         }
 
-        if alarm.settings.volumeSettings.volumeEnforced {
+        if alarm.volumeEnforced {
             alarm.volumeEnforcementTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
                 let currentSystemVolume = self.getSystemVolume()
@@ -366,40 +324,34 @@ public class AlarmApiImpl: NSObject, AlarmApi {
         DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 0.1) {
             if let slider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider {
                 self.previousVolume = enable ? slider.value : nil
-                print("[SwiftAlarmPlugin] Setting system volume to \(volume).")
                 slider.value = volume
             }
             volumeView.removeFromSuperview()
         }
     }
 
-    private func fadeAlarmVolumeWithSteps(id: Int, steps: [VolumeFadeStep]) {
-        guard let audioPlayer = self.alarms[id]?.audioPlayer else {
-            return
-        }
+    private func fadeVolume(audioPlayer: AVAudioPlayer, duration: TimeInterval) {
+        let fadeInterval: TimeInterval = 0.2
+        let currentVolume = audioPlayer.volume
+        let volumeDifference = 1.0 - currentVolume
+        let steps = Int(duration / fadeInterval)
+        let volumeIncrement = volumeDifference / Float(steps)
 
-        if !audioPlayer.isPlaying {
-            return
-        }
+        var currentStep = 0
+        Timer.scheduledTimer(withTimeInterval: fadeInterval, repeats: true) { timer in
+            if !audioPlayer.isPlaying {
+                timer.invalidate()
+                NSLog("[SwiftAlarmPlugin] Volume fading stopped as audioPlayer is no longer playing.")
+                return
+            }
 
-        audioPlayer.volume = Float(steps[0].volume)
-
-        let now = DispatchTime.now()
-
-        for i in 0 ..< steps.count - 1 {
-            let startTime = steps[i].time
-            let nextStep = steps[i + 1]
-            // Subtract 50ms to avoid weird jumps that might occur when two fades collide.
-            let fadeDuration = nextStep.time - startTime - 0.05
-            let targetVolume = Float(nextStep.volume)
-
-            // Schedule the fade using setVolume for a smooth transition
-            DispatchQueue.main.asyncAfter(deadline: now + startTime) {
-                if !audioPlayer.isPlaying {
-                    return
-                }
-                print("[SwiftAlarmPlugin] Fading volume to \(targetVolume) over \(fadeDuration) seconds.")
-                audioPlayer.setVolume(targetVolume, fadeDuration: fadeDuration)
+            NSLog("[SwiftAlarmPlugin] Fading volume: \(100 * currentStep / steps)%%")
+            if currentStep >= steps {
+                timer.invalidate()
+                audioPlayer.volume = 1.0
+            } else {
+                audioPlayer.volume += volumeIncrement
+                currentStep += 1
             }
         }
     }
@@ -428,15 +380,6 @@ public class AlarmApiImpl: NSObject, AlarmApi {
 
         self.stopSilentSound()
         self.stopNotificationOnKillService()
-        
-        // Inform the Flutter plugin that the alarm was stopped
-        SwiftAlarmPlugin.alarmTriggerApi?.alarmStopped(alarmId: Int64(id), completion: { result in
-            if case .success = result {
-                NSLog("[SwiftAlarmPlugin] Alarm stopped notification for \(id) was processed successfully by Flutter.")
-            } else {
-                NSLog("[SwiftAlarmPlugin] Alarm stopped notification for \(id) encountered error in Flutter.")
-            }
-        })
     }
 
     private func stopSilentSound() {

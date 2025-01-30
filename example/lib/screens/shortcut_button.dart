@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:alarm/alarm.dart';
-import 'package:alarm/model/volume_settings.dart';
 import 'package:flutter/material.dart';
 
 class ExampleAlarmHomeShortcutButton extends StatefulWidget {
@@ -36,7 +35,7 @@ class _ExampleAlarmHomeShortcutButtonState
       id: DateTime.now().millisecondsSinceEpoch % 10000,
       dateTime: dateTime,
       assetAudioPath: 'assets/marimba.mp3',
-      volumeSettings: VolumeSettings.fixed(volume: volume),
+      volume: volume,
       notificationSettings: NotificationSettings(
         title: 'Alarm example',
         body: 'Shortcut button alarm with delay of $delayInHours hours',
@@ -60,13 +59,9 @@ class _ExampleAlarmHomeShortcutButtonState
           },
           child: FloatingActionButton(
             onPressed: () => onPressButton(0),
-            backgroundColor: Colors.green[700],
+            backgroundColor: Colors.red,
             heroTag: null,
-            child: const Text(
-              'RING NOW',
-              textScaler: TextScaler.linear(0.9),
-              textAlign: TextAlign.center,
-            ),
+            child: const Text('RING NOW', textAlign: TextAlign.center),
           ),
         ),
         if (showMenu)

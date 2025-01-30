@@ -1,9 +1,8 @@
 package com.gdelataillade.alarm.models
 
-import com.gdelataillade.alarm.generated.NotificationSettingsWire
-import kotlinx.serialization.Serializable
+import NotificationSettingsWire
+import com.google.gson.Gson
 
-@Serializable
 data class NotificationSettings(
     val title: String,
     val body: String,
@@ -19,5 +18,18 @@ data class NotificationSettings(
                 e.icon,
             )
         }
+    }
+
+    fun toWire(): NotificationSettingsWire {
+        return NotificationSettingsWire(
+            title,
+            body,
+            stopButton,
+            icon,
+        )
+    }
+
+    fun toJson(): String {
+        return Gson().toJson(this)
     }
 }

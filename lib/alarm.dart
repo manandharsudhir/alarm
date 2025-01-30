@@ -123,6 +123,21 @@ class Alarm {
             'Provided: ${alarmSettings.id}',
       );
     }
+    if (alarmSettings.volume != null &&
+        (alarmSettings.volume! < 0 || alarmSettings.volume! > 1)) {
+      throw AlarmException(
+        AlarmErrorCode.invalidArguments,
+        message: 'Volume must be between 0 and 1. '
+            'Provided: ${alarmSettings.volume}',
+      );
+    }
+    if (alarmSettings.fadeDuration < 0) {
+      throw AlarmException(
+        AlarmErrorCode.invalidArguments,
+        message: 'Fade duration must be positive. '
+            'Provided: ${alarmSettings.fadeDuration}',
+      );
+    }
   }
 
   /// When the app is killed, all the processes are terminated
@@ -154,12 +169,8 @@ class Alarm {
   static Future<void> stopAll() async {
     final alarms = await getAlarms();
 
-    iOS ? await IOSAlarm.stopAll() : await AndroidAlarm.stopAll();
-
-    await AlarmStorage.unsaveAll();
-
     for (final alarm in alarms) {
-      updateStream.add(alarm.id);
+      await stop(alarm.id);
     }
   }
 
@@ -196,6 +207,7 @@ class Alarm {
     // TODO(orkun1675): Remove this function and publish stream updates for
     // alarm start/stop events.
     updateStream.add(id);
-    Alarm.statusStream.add(StatusEnum.stopped);
+
+    statusStream.add(StatusEnum.stopped);
   }
 }

@@ -1,12 +1,9 @@
 import 'package:alarm/src/generated/platform_bindings.g.dart';
-import 'package:equatable/equatable.dart';
-import 'package:json_annotation/json_annotation.dart';
-
-part 'notification_settings.g.dart';
+import 'package:flutter/widgets.dart';
 
 /// Model for notification settings.
-@JsonSerializable()
-class NotificationSettings extends Equatable {
+@immutable
+class NotificationSettings {
   /// Constructs an instance of `NotificationSettings`.
   ///
   /// Open PR if you want more features.
@@ -17,16 +14,21 @@ class NotificationSettings extends Equatable {
     this.icon,
   });
 
-  /// Converts the JSON object to a `NotificationSettings` instance.
-  factory NotificationSettings.fromJson(Map<String, dynamic> json) =>
-      _$NotificationSettingsFromJson(json);
-
   /// Converts from wire datatype.
   NotificationSettings.fromWire(NotificationSettingsWire wire)
       : title = wire.title,
         body = wire.body,
         stopButton = wire.stopButton,
         icon = wire.icon;
+
+  /// Constructs an instance of `NotificationSettings` from a JSON object.
+  factory NotificationSettings.fromJson(Map<String, dynamic> json) =>
+      NotificationSettings(
+        title: json['title'] as String,
+        body: json['body'] as String,
+        stopButton: json['stopButton'] as String?,
+        icon: json['icon'] as String?,
+      );
 
   /// Title of the notification to be shown when alarm is triggered.
   final String title;
@@ -63,9 +65,6 @@ class NotificationSettings extends Equatable {
   /// Defaults to `null`.
   final String? icon;
 
-  /// Converts the `NotificationSettings` instance to a JSON object.
-  Map<String, dynamic> toJson() => _$NotificationSettingsToJson(this);
-
   /// Converts to wire datatype which is used for host platform communication.
   NotificationSettingsWire toWire() => NotificationSettingsWire(
         title: title,
@@ -73,6 +72,35 @@ class NotificationSettings extends Equatable {
         stopButton: stopButton,
         icon: icon,
       );
+
+  /// Converts the `NotificationSettings` instance to a JSON object.
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'body': body,
+        'stopButton': stopButton,
+        'icon': icon,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NotificationSettings &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          body == other.body &&
+          stopButton == other.stopButton &&
+          icon == other.icon;
+
+  @override
+  int get hashCode => Object.hash(
+        title,
+        body,
+        stopButton,
+        icon,
+      );
+
+  @override
+  String toString() => 'NotificationSettings: ${toJson()}';
 
   /// Creates a copy of this notification settings but with the given fields
   /// replaced with the new values.
@@ -92,7 +120,4 @@ class NotificationSettings extends Equatable {
       icon: icon ?? this.icon,
     );
   }
-
-  @override
-  List<Object?> get props => [title, body, stopButton, icon];
 }

@@ -4,110 +4,90 @@ struct AlarmSettings: Codable {
     let id: Int
     let dateTime: Date
     let assetAudioPath: String
-    let volumeSettings: VolumeSettings
-    let notificationSettings: NotificationSettings
     let loopAudio: Bool
     let vibrate: Bool
+    let volume: Double?
+    let fadeDuration: Double
     let warningNotificationOnKill: Bool
     let androidFullScreenIntent: Bool
-    let allowAlarmOverlap: Bool
+    let notificationSettings: NotificationSettings
+    let volumeEnforced: Bool
 
-    enum CodingKeys: String, CodingKey {
-        case id, dateTime, assetAudioPath, volumeSettings, notificationSettings,
-             loopAudio, vibrate, warningNotificationOnKill, androidFullScreenIntent,
-             allowAlarmOverlap, volume, fadeDuration, volumeEnforced
-    }
-
-    /// Custom initializer to handle backward compatibility for older models
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        // Decode mandatory fields
-        id = try container.decode(Int.self, forKey: .id)
-        dateTime = try container.decode(Date.self, forKey: .dateTime)
-        assetAudioPath = try container.decode(String.self, forKey: .assetAudioPath)
-        notificationSettings = try container.decode(NotificationSettings.self, forKey: .notificationSettings)
-        loopAudio = try container.decode(Bool.self, forKey: .loopAudio)
-        vibrate = try container.decode(Bool.self, forKey: .vibrate)
-        warningNotificationOnKill = try container.decode(Bool.self, forKey: .warningNotificationOnKill)
-        androidFullScreenIntent = try container.decode(Bool.self, forKey: .androidFullScreenIntent)
-
-        // Backward compatibility for `allowAlarmOverlap`
-        allowAlarmOverlap = try container.decodeIfPresent(Bool.self, forKey: .allowAlarmOverlap) ?? false
-
-        // Backward compatibility for `volumeSettings`
-        if let volumeSettingsDecoded = try? container.decode(VolumeSettings.self, forKey: .volumeSettings) {
-            volumeSettings = volumeSettingsDecoded
-        } else {
-            // Reconstruct `volumeSettings` from older fields
-            let volume = try container.decodeIfPresent(Double.self, forKey: .volume)
-            let fadeDurationSeconds = try container.decodeIfPresent(Double.self, forKey: .fadeDuration)
-            let fadeDuration = fadeDurationSeconds.map { TimeInterval($0) }
-            let volumeEnforced = try container.decodeIfPresent(Bool.self, forKey: .volumeEnforced) ?? false
-
-            volumeSettings = VolumeSettings(
-                volume: volume,
-                fadeDuration: fadeDuration,
-                fadeSteps: [], // No equivalent for fadeSteps in older models
-                volumeEnforced: volumeEnforced
-            )
-        }
-    }
-
-    /// Encode method to support `Encodable` protocol
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-
-        try container.encode(id, forKey: .id)
-        try container.encode(dateTime, forKey: .dateTime)
-        try container.encode(assetAudioPath, forKey: .assetAudioPath)
-        try container.encode(volumeSettings, forKey: .volumeSettings)
-        try container.encode(notificationSettings, forKey: .notificationSettings)
-        try container.encode(loopAudio, forKey: .loopAudio)
-        try container.encode(vibrate, forKey: .vibrate)
-        try container.encode(warningNotificationOnKill, forKey: .warningNotificationOnKill)
-        try container.encode(androidFullScreenIntent, forKey: .androidFullScreenIntent)
-        try container.encode(allowAlarmOverlap, forKey: .allowAlarmOverlap)
-    }
-
-    /// Memberwise initializer
-    init(
-        id: Int,
-        dateTime: Date,
-        assetAudioPath: String,
-        volumeSettings: VolumeSettings,
-        notificationSettings: NotificationSettings,
-        loopAudio: Bool,
-        vibrate: Bool,
-        warningNotificationOnKill: Bool,
-        androidFullScreenIntent: Bool,
-        allowAlarmOverlap: Bool
-    ) {
-        self.id = id
-        self.dateTime = dateTime
-        self.assetAudioPath = assetAudioPath
-        self.volumeSettings = volumeSettings
-        self.notificationSettings = notificationSettings
-        self.loopAudio = loopAudio
-        self.vibrate = vibrate
-        self.warningNotificationOnKill = warningNotificationOnKill
-        self.androidFullScreenIntent = androidFullScreenIntent
-        self.allowAlarmOverlap = allowAlarmOverlap
-    }
-
-    /// Converts from wire model to `AlarmSettings`.
     static func from(wire: AlarmSettingsWire) -> AlarmSettings {
         return AlarmSettings(
             id: Int(truncatingIfNeeded: wire.id),
             dateTime: Date(timeIntervalSince1970: TimeInterval(wire.millisecondsSinceEpoch / 1_000)),
             assetAudioPath: wire.assetAudioPath,
-            volumeSettings: VolumeSettings.from(wire: wire.volumeSettings),
-            notificationSettings: NotificationSettings.from(wire: wire.notificationSettings),
             loopAudio: wire.loopAudio,
             vibrate: wire.vibrate,
+            volume: wire.volume,
+            fadeDuration: wire.fadeDuration,
             warningNotificationOnKill: wire.warningNotificationOnKill,
             androidFullScreenIntent: wire.androidFullScreenIntent,
-            allowAlarmOverlap: wire.allowAlarmOverlap
+            notificationSettings: NotificationSettings.from(wire: wire.notificationSettings),
+            volumeEnforced: wire.volumeEnforced
         )
+    }
+
+    static func fromJson(json: [String: Any]) -> AlarmSettings? {
+        guard let id = json["id"] as? Int,
+              let dateTimeMicros = json["dateTime"] as? Int64,
+              let assetAudioPath = json["assetAudioPath"] as? String,
+              let loopAudio = json["loopAudio"] as? Bool,
+              let vibrate = json["vibrate"] as? Bool,
+              let fadeDuration = json["fadeDuration"] as? Double,
+              let warningNotificationOnKill = json["warningNotificationOnKill"] as? Bool,
+              let androidFullScreenIntent = json["androidFullScreenIntent"] as? Bool,
+              let notificationSettingsDict = json["notificationSettings"] as? [String: Any]
+        else {
+            return nil
+        }
+
+        // Ensure the dateTimeMicros is within a valid range
+        let maxValidMicroseconds: Int64 = 9_223_372_036_854_775 // Corresponding to year 2262
+        let safeDateTimeMicros = min(dateTimeMicros, maxValidMicroseconds)
+
+        let dateTime = Date(timeIntervalSince1970: TimeInterval(safeDateTimeMicros) / 1_000_000)
+        let volume: Double? = json["volume"] as? Double
+        let notificationSettings = NotificationSettings.fromJson(json: notificationSettingsDict)
+        let volumeEnforced: Bool = json["volumeEnforced"] as? Bool ?? false
+
+        return AlarmSettings(
+            id: id,
+            dateTime: dateTime,
+            assetAudioPath: assetAudioPath,
+            loopAudio: loopAudio,
+            vibrate: vibrate,
+            volume: volume,
+            fadeDuration: fadeDuration,
+            warningNotificationOnKill: warningNotificationOnKill,
+            androidFullScreenIntent: androidFullScreenIntent,
+            notificationSettings: notificationSettings,
+            volumeEnforced: volumeEnforced
+        )
+    }
+
+    static func toJson(alarmSettings: AlarmSettings) -> [String: Any] {
+        let timestamp = alarmSettings.dateTime.timeIntervalSince1970
+        let microsecondsPerSecond: Double = 1_000_000
+        let dateTimeMicros = timestamp * microsecondsPerSecond
+
+        // Ensure the microseconds value does not overflow Int64 and is within a valid range
+        let maxValidMicroseconds: Double = 9_223_372_036_854_775
+        let safeDateTimeMicros = dateTimeMicros <= maxValidMicroseconds ? Int64(dateTimeMicros) : Int64(maxValidMicroseconds)
+
+        return [
+            "id": alarmSettings.id,
+            "dateTime": safeDateTimeMicros,
+            "assetAudioPath": alarmSettings.assetAudioPath,
+            "loopAudio": alarmSettings.loopAudio,
+            "vibrate": alarmSettings.vibrate,
+            "volume": alarmSettings.volume,
+            "volumeEnforced": alarmSettings.volumeEnforced,
+            "fadeDuration": alarmSettings.fadeDuration,
+            "warningNotificationOnKill": alarmSettings.warningNotificationOnKill,
+            "androidFullScreenIntent": alarmSettings.androidFullScreenIntent,
+            "notificationSettings": NotificationSettings.toJson(notificationSettings: alarmSettings.notificationSettings)
+        ]
     }
 }

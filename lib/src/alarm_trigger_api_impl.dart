@@ -24,7 +24,7 @@ class AlarmTriggerApiImpl extends AlarmTriggerApi {
       return;
     }
     Alarm.ringStream.add(settings);
-    Alarm.statusStream.add(StatusEnum.playing);
+    Alarm.statusStream.add(StatusEnum.stopped);
   }
 
   @override

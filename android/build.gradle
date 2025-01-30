@@ -2,7 +2,7 @@ group 'com.gdelataillade.alarm.alarm'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.9.25'
+    ext.kotlin_version = '1.8.22'
     repositories {
         google()
         mavenCentral()
@@ -11,7 +11,6 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.2.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath "org.jetbrains.kotlin:kotlin-serialization:$kotlin_version"
     }
 }
 
@@ -24,7 +23,6 @@ allprojects {
 
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
-apply plugin: 'kotlinx-serialization'
 
 android {
     namespace 'com.gdelataillade.alarm.alarm'
@@ -56,10 +54,5 @@ android {
 }
 
 dependencies {
-    //noinspection v1.1.1 has a bug that prevents native_debug_symbol generation
-    //             see: https://issuetracker.google.com/u/0/issues/342671895
-    implementation 'androidx.datastore:datastore:1.0.0'
-    implementation 'androidx.datastore:datastore-preferences:1.0.0'
-    //noinspection GradleDependency: 1.7+ requires Kotlin 2
-    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3'
+    implementation 'com.google.code.gson:gson:2.11.0'
 }
